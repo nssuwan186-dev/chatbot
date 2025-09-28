@@ -1,0 +1,17 @@
+{
+  "name": "viphat-hotel-pro",
+  "version": "1.0.0",
+  "description": "Viphat Hotel Management Pro - Thai SPA with Node.js backend",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node server.js --seed"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
+
