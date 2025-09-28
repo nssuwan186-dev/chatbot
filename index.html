@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจัดการโรงแรมวิพัฒน์ (Viphat Hotel Management Pro)</title>
+    <title>ระบบจัดการโรงแรมวิพัฒน์</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,7 +28,7 @@
     <div class="flex h-screen">
         <nav class="w-64 bg-gray-800 text-white flex flex-col flex-shrink-0">
             <div class="p-5 border-b border-gray-700">
-                <h1 class="text-2xl font-bold">วิพัฒน์โฮเทล Pro</h1>
+                <h1 class="text-2xl font-bold">วิพัฒน์โฮเทล</h1>
                 <p class="text-sm text-gray-400">ระบบจัดการโรงแรม</p>
             </div>
             <ul class="flex-grow">
@@ -39,7 +39,7 @@
             </ul>
             <div class="p-4 border-t border-gray-700 text-sm text-gray-400">
                 <p id="current-time" class="text-center"></p>
-                <p>&copy; 2025 Viphat Hotel</p>
+                <p>&copy; 2025 วิพัฒน์โฮเทล</p>
             </div>
         </nav>
 
@@ -383,15 +383,15 @@ const app = (() => {
     function getStatusForRoomOnDate(room, isoDate) {
         const dateObj = new Date(isoDate);
         const cleanOnDate = state.cleaning?.[isoDate]?.[room];
-        if (cleanOnDate) return 'cleaning';
+        if (cleanOnDate) return 'ทำความสะอาด';
 
         const hasStay = state.stays.some(st => st.room === room && st.checkIn && st.checkOut && isDateInRange(new Date(isoDate), new Date(st.checkIn), new Date(st.checkOut)));
-        if (hasStay) return 'occupied';
+        if (hasStay) return 'ไม่ว่าง';
 
         const hasBooking = state.bookings.some(b => b.room === room && isDateInRange(new Date(isoDate), new Date(b.checkIn), new Date(b.checkOut)));
-        if (hasBooking) return 'booked';
+        if (hasBooking) return 'จอง';
 
-        return 'vacant';
+        return 'ว่าง';
     }
 
     function renderDashboard() {
@@ -422,7 +422,7 @@ const app = (() => {
                     <div class="text-3xl font-bold">${uniqueRooms}</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-5">
-                    <div class="text-sm text-gray-500">การจองล่วงหน้า (Local)</div>
+                    <div class="text-sm text-gray-500">การจองล่วงหน้า (บันทึกในเครื่อง)</div>
                     <div class="text-3xl font-bold">${state.bookings.length}</div>
                 </div>
             </div>
@@ -459,8 +459,8 @@ const app = (() => {
         const grid = document.getElementById('room-grid');
         grid.innerHTML = state.rooms.map(room => {
             const status = getStatusForRoomOnDate(room, iso);
-            const label = status === 'occupied' ? 'ไม่ว่าง' : status === 'vacant' ? 'ว่าง' : status === 'booked' ? 'จอง' : 'ทำความสะอาด';
-            const badge = status === 'occupied' ? 'status-occupied' : status === 'vacant' ? 'status-vacant' : status === 'booked' ? 'status-booked' : 'status-cleaning';
+            const label = status;
+            const badge = status === 'ไม่ว่าง' ? 'status-occupied' : status === 'ว่าง' ? 'status-vacant' : status === 'จอง' ? 'status-booked' : 'status-cleaning';
             return `
                 <div class="room-card ${badge} rounded-lg p-3 cursor-pointer" onclick="app.openRoom('${room}')">
                     <div class="flex items-center justify-between">
@@ -690,7 +690,7 @@ const app = (() => {
             <div class="space-y-4">
                 <div class="flex items-center justify-between">
                     <div class="text-lg font-semibold">ห้อง ${room}</div>
-                    <div class="text-xs px-2 py-1 rounded ${status==='occupied'?'bg-red-100 text-red-700':status==='vacant'?'bg-green-100 text-green-700':status==='booked'?'bg-blue-100 text-blue-700':'bg-yellow-100 text-yellow-700'}">สถานะ: ${status}</div>
+                    <div class="text-xs px-2 py-1 rounded ${status==='ไม่ว่าง'?'bg-red-100 text-red-700':status==='ว่าง'?'bg-green-100 text-green-700':status==='จอง'?'bg-blue-100 text-blue-700':'bg-yellow-100 text-yellow-700'}">สถานะ: ${status}</div>
                 </div>
                 <div>
                     <div class="font-medium mb-2">ประวัติ (ล่าสุด)</div>
@@ -707,7 +707,7 @@ const app = (() => {
 
         const toggleBtn = document.createElement('button');
         toggleBtn.className = 'px-4 py-2 rounded bg-yellow-500 text-white hover:bg-yellow-600';
-        toggleBtn.textContent = status === 'cleaning' ? 'ยกเลิกสถานะทำความสะอาด' : 'ตั้งเป็น ทำความสะอาด';
+        toggleBtn.textContent = status === 'ทำความสะอาด' ? 'ยกเลิกสถานะทำความสะอาด' : 'ตั้งเป็น ทำความสะอาด';
         toggleBtn.onclick = () => {
             if (!state.cleaning[iso]) state.cleaning[iso] = {};
             const current = !!state.cleaning[iso][room];
