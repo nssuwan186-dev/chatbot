@@ -178,6 +178,77 @@ app.post('/api/cleaning', (req, res) => {
   res.json({ ok: true });
 });
 
+// CSV export helpers
+function toCSV(rows, headerMap) {
+  const headers = Object.keys(headerMap);
+  const cols = Object.values(headerMap);
+  const csv = [headers.join(',')]
+    .concat(rows.map(r => cols.map(k => sanitizeCSV(String(r[k] ?? ''))).join(',')))
+    .join('\n');
+  return csv + '\n';
+}
+
+function sanitizeCSV(v) {
+  if (v.includes('"') || v.includes(',') || v.includes('\n')) {
+    return '"' + v.replace(/"/g, '""') + '"';
+  }
+  return v;
+}
+
+app.get('/api/export/stays.csv', (req, res) => {
+  const rows = db.prepare('SELECT * FROM stays ORDER BY check_in').all();
+  const csv = toCSV(rows, {
+    'เลขที่ลำดับ': 'seq',
+    'Transaction ID': 'transaction_id',
+    'ประเภทการชำระเงิน': 'payment_type',
+    'วันเวลา เข้ามาพัก': 'check_in',
+    'ห้องพักเลขที่': 'room_id',
+    'ชื่อตัวและชื่อสกุล': 'full_name',
+    'สัญชาติ': 'nationality',
+    'เลขประจำตัว/เอกสาร': 'id_number',
+    'ออกให้โดย': 'issued_by',
+    'อาชีพ': 'occupation',
+    'มาจาก': 'origin',
+    'จะไป': 'destination',
+    'วันเวลาที่ออกไป': 'check_out'
+  });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="stays.csv"');
+  res.send(csv);
+});
+
+app.get('/api/export/bookings.csv', (req, res) => {
+  const rows = db.prepare('SELECT * FROM bookings ORDER BY check_in').all();
+  const csv = toCSV(rows, {
+    'รหัส': 'id',
+    'ลูกค้า': 'guest_name',
+    'ห้อง': 'room_id',
+    'เช็คอิน': 'check_in',
+    'เช็คเอาท์': 'check_out',
+    'ชำระเงิน': 'payment_type',
+    'หมายเหตุ': 'note'
+  });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="bookings.csv"');
+  res.send(csv);
+});
+
+app.get('/api/export/expenses.csv', (req, res) => {
+  const date = req.query.date_iso;
+  const rows = date
+    ? db.prepare('SELECT * FROM expenses WHERE date_iso = ? ORDER BY id').all(date)
+    : db.prepare('SELECT * FROM expenses ORDER BY date_iso, id').all();
+  const csv = toCSV(rows, {
+    'วันที่': 'date_iso',
+    'หมวดหมู่': 'category',
+    'จำนวนเงิน': 'amount',
+    'หมายเหตุ': 'note'
+  });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="expenses.csv"');
+  res.send(csv);
+});
+
 // Serve static frontend
 app.use(express.static(__dirname));
 

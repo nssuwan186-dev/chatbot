@@ -430,6 +430,10 @@ const app = (() => {
                 <div class="bg-white rounded-lg shadow p-5">
                     <div class="font-semibold mb-3">สรุปประเภทการชำระเงิน</div>
                     ${paymentBars || '<div class="text-sm text-gray-500">ไม่มีข้อมูล</div>'}
++                    <div class="mt-4">
++                        <button onclick="app.exportCSV('stays')" class="text-sm bg-gray-800 text-white rounded px-3 py-1 hover:bg-gray-700">ส่งออก CSV (ผู้เข้าพัก)</button>
++                        <button onclick="app.exportCSV('bookings')" class="ml-2 text-sm bg-blue-700 text-white rounded px-3 py-1 hover:bg-blue-600">ส่งออก CSV (การจอง)</button>
++                    </div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-5">
                     <div class="font-semibold mb-3">เช็คอินล่าสุด</div>
@@ -556,6 +560,9 @@ const app = (() => {
                         </div>
                     `).join('') || '<div class="text-sm text-gray-500">ไม่มีรายการ</div>'}
                 </div>
++                <div class="mt-4">
++                    <button onclick="app.exportCSV('expenses', document.getElementById('report-date-picker').value)" class="text-sm bg-emerald-600 text-white rounded px-3 py-1 hover:bg-emerald-500">ส่งออก CSV (รายจ่ายวันนี้)</button>
++                </div>
             </div>
         `;
     }
@@ -770,7 +777,15 @@ const app = (() => {
         showBookingModal,
         showExpenseModal,
         openRoom,
-        deleteBooking
+        deleteBooking,
+        exportCSV: (type, dateIso) => {
+            let url = '';
+            if (type === 'stays') url = '/api/export/stays.csv';
+            else if (type === 'bookings') url = '/api/export/bookings.csv';
+            else if (type === 'expenses') url = '/api/export/expenses.csv' + (dateIso ? ('?date_iso=' + encodeURIComponent(dateIso)) : '');
+            if (!url) return;
+            window.open(url, '_blank');
+        }
     };
 })();
 
