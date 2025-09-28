@@ -311,6 +311,19 @@ const app = (() => {
         localStorage.setItem(key, JSON.stringify(value));
     }
 
+    async function apiFetch(path, opts = {}) {
+        try {
+            const res = await fetch(path, opts);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const ct = res.headers.get('content-type') || '';
+            if (ct.includes('application/json')) return await res.json();
+            return await res.text();
+        } catch (e) {
+            state.apiAvailable = false;
+            throw e;
+        }
+    }
+
     function parseCSV(data) {
         const lines = data.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
         const records = [];
@@ -351,7 +364,8 @@ const app = (() => {
         bookings: [],
         expenses: {}, // keyed by ISO date
         cleaning: {}, // { [isoDate]: { [room]: true } }
-        currentView: 'dashboard'
+        currentView: 'dashboard',
+        apiAvailable: true
     };
 
     function deriveRooms(records) {
@@ -453,12 +467,20 @@ const app = (() => {
         `;
     }
 
-    function renderRooms() {
+    async function renderRooms() {
         const dateInput = document.getElementById('rooms-date');
         let iso = dateInput.value;
         if (!iso) {
             iso = formatISODate(getLastDatasetDate());
             dateInput.value = iso;
+        }
+        // Load cleaning flags from API if available
+        if (state.apiAvailable) {
+            try {
+                const roomIds = await apiFetch(`/api/cleaning/${encodeURIComponent(iso)}`);
+                state.cleaning[iso] = {};
+                for (const r of roomIds) state.cleaning[iso][r] = true;
+            } catch (_) { /* fallback silently */ }
         }
         const grid = document.getElementById('room-grid');
         grid.innerHTML = state.rooms.map(room => {
@@ -477,8 +499,22 @@ const app = (() => {
         }).join('');
     }
 
-    function renderBookings() {
+    async function renderBookings() {
         const list = document.getElementById('booking-list');
+        if (state.apiAvailable) {
+            try {
+                const rows = await apiFetch('/api/bookings');
+                state.bookings = rows.map(r => ({
+                    id: r.id,
+                    guestName: r.guest_name,
+                    room: r.room_id,
+                    checkIn: r.check_in,
+                    checkOut: r.check_out,
+                    paymentType: r.payment_type,
+                    note: r.note
+                }));
+            } catch (_) { /* fallback to local */ }
+        }
         if (!state.bookings.length) {
             list.innerHTML = '<div class="text-gray-500">ยังไม่มีข้อมูลการจอง</div>';
             return;
@@ -514,7 +550,7 @@ const app = (() => {
         `;
     }
 
-    function renderReport() {
+    async function renderReport() {
         const picker = document.getElementById('report-date-picker');
         if (!picker.value) picker.value = formatISODate(getLastDatasetDate());
         const iso = picker.value;
@@ -522,7 +558,13 @@ const app = (() => {
         const checkIns = state.stays.filter(s => formatISODate(s.checkIn) === iso);
         const checkOuts = state.stays.filter(s => formatISODate(s.checkOut) === iso);
         const byPayment = checkIns.reduce((a,s) => { a[s.paymentType] = (a[s.paymentType]||0)+1; return a; }, {});
-        const expenses = state.expenses[iso] || [];
+        let expenses = state.expenses[iso] || [];
+        if (state.apiAvailable) {
+            try {
+                const rows = await apiFetch(`/api/expenses?date_iso=${encodeURIComponent(iso)}`);
+                expenses = rows;
+            } catch (_) { /* fallback to local */ }
+        }
         const expenseTotal = expenses.reduce((sum,e) => sum + (parseFloat(e.amount)||0), 0);
 
         const el = document.getElementById('report-content');
@@ -628,7 +670,7 @@ const app = (() => {
         const saveBtn = document.createElement('button');
         saveBtn.className = 'px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700';
         saveBtn.textContent = 'บันทึก';
-        saveBtn.onclick = () => {
+        saveBtn.onclick = async () => {
             const b = {
                 id: crypto.randomUUID(),
                 guestName: document.getElementById('bk-name').value.trim(),
@@ -639,10 +681,32 @@ const app = (() => {
                 note: document.getElementById('bk-note').value.trim()
             };
             if (!b.guestName || !b.room || !b.checkIn || !b.checkOut) return alert('กรอกข้อมูลให้ครบ');
-            state.bookings.push(b);
-            saveJSON(STORAGE_KEYS.bookings, state.bookings);
+            if (state.apiAvailable) {
+                try {
+                    await apiFetch('/api/bookings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: b.id,
+                            guest_name: b.guestName,
+                            room_id: b.room,
+                            check_in: b.checkIn,
+                            check_out: b.checkOut,
+                            payment_type: b.paymentType,
+                            note: b.note
+                        })
+                    });
+                } catch (_) {
+                    // fallback to local
+                    state.bookings.push(b);
+                    saveJSON(STORAGE_KEYS.bookings, state.bookings);
+                }
+            } else {
+                state.bookings.push(b);
+                saveJSON(STORAGE_KEYS.bookings, state.bookings);
+            }
             closeModal();
-            renderBookings();
+            await renderBookings();
             if (!document.getElementById('rooms-view').classList.contains('hidden')) renderRooms();
         };
         openModal('เพิ่มการจองใหม่', body, [cancelBtn, saveBtn]);
@@ -675,16 +739,30 @@ const app = (() => {
         const saveBtn = document.createElement('button');
         saveBtn.className = 'px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700';
         saveBtn.textContent = 'บันทึก';
-        saveBtn.onclick = () => {
+        saveBtn.onclick = async () => {
             const category = document.getElementById('ex-cat').value.trim();
             const amount = parseFloat(document.getElementById('ex-amt').value);
             const note = document.getElementById('ex-note').value.trim();
             if (!category || Number.isNaN(amount)) return alert('กรอกหมวดหมู่และจำนวนเงินให้ถูกต้อง');
-            if (!state.expenses[iso]) state.expenses[iso] = [];
-            state.expenses[iso].push({ category, amount, note });
-            saveJSON(STORAGE_KEYS.expenses, state.expenses);
+            if (state.apiAvailable) {
+                try {
+                    await apiFetch('/api/expenses', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ date_iso: iso, category, amount, note })
+                    });
+                } catch (_) {
+                    if (!state.expenses[iso]) state.expenses[iso] = [];
+                    state.expenses[iso].push({ category, amount, note });
+                    saveJSON(STORAGE_KEYS.expenses, state.expenses);
+                }
+            } else {
+                if (!state.expenses[iso]) state.expenses[iso] = [];
+                state.expenses[iso].push({ category, amount, note });
+                saveJSON(STORAGE_KEYS.expenses, state.expenses);
+            }
             closeModal();
-            renderReport();
+            await renderReport();
         };
         openModal('เพิ่มรายจ่าย', body, [cancelBtn, saveBtn]);
     }
@@ -715,11 +793,24 @@ const app = (() => {
         const toggleBtn = document.createElement('button');
         toggleBtn.className = 'px-4 py-2 rounded bg-yellow-500 text-white hover:bg-yellow-600';
         toggleBtn.textContent = status === 'ทำความสะอาด' ? 'ยกเลิกสถานะทำความสะอาด' : 'ตั้งเป็น ทำความสะอาด';
-        toggleBtn.onclick = () => {
+        toggleBtn.onclick = async () => {
             if (!state.cleaning[iso]) state.cleaning[iso] = {};
             const current = !!state.cleaning[iso][room];
-            if (current) delete state.cleaning[iso][room]; else state.cleaning[iso][room] = true;
-            saveJSON(STORAGE_KEYS.cleaning, state.cleaning);
+            if (state.apiAvailable) {
+                try {
+                    await apiFetch('/api/cleaning', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ date_iso: iso, room_id: room, active: !current })
+                    });
+                } catch (_) {
+                    if (current) delete state.cleaning[iso][room]; else state.cleaning[iso][room] = true;
+                    saveJSON(STORAGE_KEYS.cleaning, state.cleaning);
+                }
+            } else {
+                if (current) delete state.cleaning[iso][room]; else state.cleaning[iso][room] = true;
+                saveJSON(STORAGE_KEYS.cleaning, state.cleaning);
+            }
             closeModal();
             renderRooms();
         };
@@ -727,10 +818,18 @@ const app = (() => {
         openModal(`รายละเอียดห้อง ${room}`, body, [closeBtn, toggleBtn]);
     }
 
-    function deleteBooking(id) {
-        state.bookings = state.bookings.filter(b => b.id !== id);
-        saveJSON(STORAGE_KEYS.bookings, state.bookings);
-        renderBookings();
+    async function deleteBooking(id) {
+        if (state.apiAvailable) {
+            try { await apiFetch(`/api/bookings/${encodeURIComponent(id)}`, { method: 'DELETE' }); }
+            catch (_) {
+                state.bookings = state.bookings.filter(b => b.id !== id);
+                saveJSON(STORAGE_KEYS.bookings, state.bookings);
+            }
+        } else {
+            state.bookings = state.bookings.filter(b => b.id !== id);
+            saveJSON(STORAGE_KEYS.bookings, state.bookings);
+        }
+        await renderBookings();
         if (!document.getElementById('rooms-view').classList.contains('hidden')) renderRooms();
     }
 
@@ -755,12 +854,41 @@ const app = (() => {
         if (el) el.textContent = dateStr;
     }
 
-    function init() {
-        state.stays = parseCSV(csvData);
-        state.rooms = deriveRooms(state.stays);
-        state.bookings = loadJSON(STORAGE_KEYS.bookings, []);
-        state.expenses = loadJSON(STORAGE_KEYS.expenses, {});
-        state.cleaning = loadJSON(STORAGE_KEYS.cleaning, {});
+    async function init() {
+        // Try load from API
+        try {
+            const [rooms, stays, bookings] = await Promise.all([
+                apiFetch('/api/rooms'),
+                apiFetch('/api/stays'),
+                apiFetch('/api/bookings')
+            ]);
+            state.rooms = rooms;
+            state.stays = stays.map(s => ({
+                ...s,
+                checkIn: s.check_in ? new Date(s.check_in) : null,
+                checkOut: s.check_out ? new Date(s.check_out) : null,
+                paymentType: s.payment_type,
+                fullName: s.full_name,
+                room: s.room_id
+            }));
+            state.bookings = bookings.map(r => ({
+                id: r.id,
+                guestName: r.guest_name,
+                room: r.room_id,
+                checkIn: r.check_in,
+                checkOut: r.check_out,
+                paymentType: r.payment_type,
+                note: r.note
+            }));
+        } catch (e) {
+            // Fallback to embedded CSV + localStorage
+            state.apiAvailable = false;
+            state.stays = parseCSV(csvData);
+            state.rooms = deriveRooms(state.stays);
+            state.bookings = loadJSON(STORAGE_KEYS.bookings, []);
+            state.expenses = loadJSON(STORAGE_KEYS.expenses, {});
+            state.cleaning = loadJSON(STORAGE_KEYS.cleaning, {});
+        }
 
         document.getElementById('form-modal-close-btn').addEventListener('click', closeModal);
         document.getElementById('rooms-date').addEventListener('change', renderRooms);
