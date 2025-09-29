@@ -20,6 +20,7 @@ npm start      # เปิดเซิร์ฟเวอร์ที่ http://l
 - การจอง: เพิ่ม/ลบ บันทึกลงฐานข้อมูล (หรือ LocalStorage เมื่อ API ใช้ไม่ได้)
 - รายงาน: เลือกวันที่, ดูเช็คอิน/เช็คเอาต์, เพิ่มรายจ่าย, รวมยอด
 - ส่งออก CSV: ผู้เข้าพัก, การจอง, รายจ่าย (ทั้งผ่านปุ่มในหน้าเว็บ และ API)
+- PWA: ติดตั้งลงหน้าจอหลัก ใช้งานออฟไลน์บางส่วน (service worker + manifest)
 
 ## API หลัก
 - GET `/api/rooms`
@@ -48,6 +49,30 @@ npm start
 # เปิด http://127.0.0.1:8080
 ```
 
-## หมายเหตุ
-- หาก backend ใช้ไม่ได้ Frontend จะ fallback ไปที่ CSV/LocalStorage อัตโนมัติ
-- ข้อมูลตัวอย่างฝังอยู่ในตัวแปร `csvData` ภายใน `index.html`
+## Docker
+```bash
+docker build -t viphat-hotel .
+docker run -p 8080:8080 --name viphat viphat-hotel
+```
+
+## GitHub Actions (GHCR)
+- workflow: `.github/workflows/docker-ghcr.yml`
+- เมื่อ push สาขา `viphat-hotel-app` จะ build และ push image ไปที่ GHCR ของคุณ
+
+## Render Deploy (ทางเลือก)
+- ใช้ workflow `.github/workflows/render-deploy.yml` แล้วกด Run workflow พร้อมใส่ `hook_url` ของ Render deploy hook
+
+## PWA
+- มี `manifest.webmanifest` และ `sw.js`
+- เปิดเว็บด้วย Chrome แล้วเลือก “Add to Home screen/ติดตั้งแอป”
+
+## ทำเป็น Android APK (ทางเลือก)
+- สามารถห่อด้วย Capacitor:
+  ```bash
+  npm install --save-dev @capacitor/cli @capacitor/core @capacitor/android
+  npx cap init viphat-hotel com.viphat.hotel
+  npx cap add android
+  npx cap copy
+  npx cap open android  # เปิด Android Studio เพื่อ build APK/AAB
+  ```
+- หรือใช้ Cordova/Capacitor ตามถนัด

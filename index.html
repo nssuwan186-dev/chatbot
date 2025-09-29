@@ -9,6 +9,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#1D4ED8">
     <style>
         body { font-family: 'Sarabun', sans-serif; }
         .nav-link { cursor: pointer; transition: all 0.2s; }
@@ -99,6 +101,12 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
 <script>
+// Register Service Worker (PWA)
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+}
 // ข้อมูลทั้งหมดจากไฟล์ CSV ที่ผู้ใช้ให้มา
 const csvData = `ประจำเดือน,,,,,,,สิงหาคม,  2568,,,,
 เลขที่ลำดับ,Transaction ID,ประเภทการชำระเงิน,  วันเวลา เข้ามาพัก,ห้องพักเลขที่,ชื่อตัวและชื่อสกุล,สัญชาติ, เลขประจำตัวประชาชนหรือ    ใบสำคัญประจำตัวคนต่างด้าว  หรือหนังสือเดินทาง   เลขที่....ออกให้โดย, ที่อยู่ปัจจุบัน               อยู่ที่ ตำบล อำเภอ    จังหวัด หรือประเทศใด,อาชีพ,มาจากตำบล อำเภอ จังหวัด หรือประเทศใด,จะไปตำบล อำเภอ จังหวัด หรือประเทศใด,วันเวลาที่ออกไป
